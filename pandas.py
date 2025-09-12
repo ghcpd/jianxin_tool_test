@@ -49,7 +49,8 @@ class DataFrame:
                 for d in data:
                     self._rows.append(dict(d))
             elif data and isinstance(data[0], (list, tuple)):
-                self.columns = Columns(list(columns or []))
+                cols = list(columns) if columns else [str(i) for i in range(len(data[0]))]
+                self.columns = Columns(cols)
                 for row in data:
                     self._rows.append({self.columns[i]: row[i] for i in range(len(self.columns))})
             else:
@@ -91,7 +92,14 @@ def read_csv(filename):
         if not rows:
             raise errors.EmptyDataError("No columns to parse from file")
         cols = rows[0]
-        data = [dict(zip(cols, r)) for r in rows[1:]]
+        def convert(v):
+            if isinstance(v, str) and v.isdigit():
+                try:
+                    return int(v)
+                except Exception:
+                    return v
+            return v
+        data = [dict(zip(cols, [convert(v) for v in r])) for r in rows[1:]]
         return DataFrame(data)
 
 

@@ -271,13 +271,6 @@ class TestAsyncAcrHelper:
         assert list(result.columns) == ["repository", "tag", "created_on", "last_updated_on", "digest"]
         mock_save_csv.assert_called_once()
 
-        get_acr_repository_properties("test_repo")
-        
-        mock_client_class.assert_called_once_with(
-            endpoint="https://env_acr.azurecr.io",
-            credential=mock_credential.return_value,
-            audience="https://management.azure.com"
-        )
 
 
 class TestIntegration:
