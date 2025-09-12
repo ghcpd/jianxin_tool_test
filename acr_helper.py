@@ -1,14 +1,18 @@
 import os
 from dotenv import load_dotenv
-from azure.identity import DefaultAzureCredential
-from azure.containerregistry import ContainerRegistryClient
+try:
+    from azure.identity import DefaultAzureCredential
+    from azure.containerregistry import ContainerRegistryClient
+except Exception:
+    DefaultAzureCredential = None
+    ContainerRegistryClient = None
 import pandas as pd
 from pathlib import Path
 
 load_dotenv()
 
 def save_to_csv(data, filename):
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(data) if data else pd.DataFrame(columns=["empty"])
     Path(filename).parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(filename, index=False)
     print(f"Data saved to {filename}")
