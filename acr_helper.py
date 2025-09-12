@@ -10,6 +10,17 @@ import asyncio
 from azure.containerregistry.aio import ContainerRegistryClient as ACRAsync
 from azure.identity.aio import DefaultAzureCredential as DefaultAzureCredentialAsync
 
+
+# Expose a single aio namespace for easier testing/mocking
+class _Aio:
+    pass
+
+aio = _Aio()
+from azure.containerregistry.aio import ContainerRegistryClient as _ACR
+from azure.identity.aio import DefaultAzureCredential as _DefaultAio
+aio.ContainerRegistryClient = _ACR
+aio.DefaultAzureCredential = _DefaultAio
+
 load_dotenv()
 
 def save_to_csv(data, filename):
@@ -97,8 +108,8 @@ async def list_acr_repositories_async(acr_name: str=None, save_path: str=None):
     try:
         acr_name = acr_name or os.getenv("ACR_NAME", "acvdpwu2p001acr")
         acr_url = f"https://{acr_name}.azurecr.io"
-        credential = DefaultAzureCredentialAsync()
-        async with ACRAsync(endpoint=acr_url, credential=credential, audience="https://management.azure.com") as client:
+        credential = aio.DefaultAzureCredential()
+        async with aio.ContainerRegistryClient(endpoint=acr_url, credential=credential, audience="https://management.azure.com") as client:
             repos = []
             async for repo in client.list_repository_names():
                 repos.append([repo])
@@ -114,8 +125,8 @@ async def get_acr_repository_properties_async(repository_name: str, acr_name: st
     try:
         acr_name = acr_name or os.getenv("ACR_NAME", "acvdpwu2p001acr")
         acr_url = f"https://{acr_name}.azurecr.io"
-        credential = DefaultAzureCredentialAsync()
-        async with ACRAsync(endpoint=acr_url, credential=credential, audience="https://management.azure.com") as client:
+        credential = aio.DefaultAzureCredential()
+        async with aio.ContainerRegistryClient(endpoint=acr_url, credential=credential, audience="https://management.azure.com") as client:
             rows = []
             async for tag in client.list_tag_properties(repository_name):
                 if verbose:
