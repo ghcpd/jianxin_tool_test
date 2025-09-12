@@ -1,7 +1,11 @@
 import os
 from dotenv import load_dotenv
-from azure.identity import DefaultAzureCredential
-from azure.containerregistry import ContainerRegistryClient
+try:
+    from azure.identity import DefaultAzureCredential
+    from azure.containerregistry import ContainerRegistryClient
+except Exception:
+    DefaultAzureCredential = None
+    ContainerRegistryClient = None
 import pandas as pd
 from pathlib import Path
 
