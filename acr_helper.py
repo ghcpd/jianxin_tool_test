@@ -10,6 +10,8 @@ import asyncio
 from azure.containerregistry.aio import ContainerRegistryClient as ACRAsync
 from azure.identity.aio import DefaultAzureCredential as DefaultAzureCredentialAsync
 
+import inspect
+
 
 # Expose a single aio namespace for easier testing/mocking
 class _Aio:
@@ -111,7 +113,10 @@ async def list_acr_repositories_async(acr_name: str=None, save_path: str=None):
         credential = aio.DefaultAzureCredential()
         async with aio.ContainerRegistryClient(endpoint=acr_url, credential=credential, audience="https://management.azure.com") as client:
             repos = []
-            async for repo in client.list_repository_names():
+            iterable = client.list_repository_names()
+            if inspect.isawaitable(iterable):
+                iterable = await iterable
+            async for repo in iterable:
                 repos.append([repo])
             df = pd.DataFrame(repos, columns=["repository"]) 
             if save_path:
@@ -128,7 +133,10 @@ async def get_acr_repository_properties_async(repository_name: str, acr_name: st
         credential = aio.DefaultAzureCredential()
         async with aio.ContainerRegistryClient(endpoint=acr_url, credential=credential, audience="https://management.azure.com") as client:
             rows = []
-            async for tag in client.list_tag_properties(repository_name):
+            iterable = client.list_tag_properties(repository_name)
+            if inspect.isawaitable(iterable):
+                iterable = await iterable
+            async for tag in iterable:
                 if verbose:
                     print(f"- {tag.name}")
                 rows.append([repository_name, tag.name, tag.created_on, tag.last_updated_on, tag.digest])
