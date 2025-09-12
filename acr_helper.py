@@ -9,6 +9,7 @@ load_dotenv()
 
 def save_to_csv(data, filename):
     df = pd.DataFrame(data)
+    Path(filename).parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(filename, index=False)
     print(f"Data saved to {filename}")
 
@@ -27,10 +28,12 @@ def list_acr_repositories(acr_name: str=None, save_path: str=None):
         # List repositories in the ACR
         repositories = client.list_repository_names()
         properties = []
-        print("Repositories in ACR:")
         for repo in repositories:
-            print(f"- {repo}")
-            
+            # print(f"Repository: {repo}")
+            properties.append([repo])
+        properties = pd.DataFrame(properties, columns=["repository"])
+        if save_path:
+            save_to_csv(properties, save_path)
     except Exception as e:
         print(f"An error occurred: {e}")
 
@@ -63,5 +66,5 @@ def get_acr_repository_properties(repository_name: str, acr_name: str=None, save
         print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    # list_acr_repositories()
-    get_acr_repository_properties("abanteai__apples-to-models-108")
+    list_acr_repositories(save_path="data/acr_repositories.csv")
+    # get_acr_repository_properties("abanteai__apples-to-models-108")
