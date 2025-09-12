@@ -111,7 +111,8 @@ async def list_acr_repositories_async(acr_name: str=None, save_path: str=None):
         acr_name = acr_name or os.getenv("ACR_NAME", "acvdpwu2p001acr")
         acr_url = f"https://{acr_name}.azurecr.io"
         credential = aio.DefaultAzureCredential()
-        async with aio.ContainerRegistryClient(endpoint=acr_url, credential=credential, audience="https://management.azure.com") as client:
+        client = aio.ContainerRegistryClient(endpoint=acr_url, credential=credential, audience="https://management.azure.com")
+        try:
             repos = []
             iterable = client.list_repository_names()
             if inspect.isawaitable(iterable):
@@ -122,6 +123,12 @@ async def list_acr_repositories_async(acr_name: str=None, save_path: str=None):
             if save_path:
                 save_to_csv(df, save_path)
             return df
+        finally:
+            closer = getattr(client, "close", None)
+            if closer:
+                res = closer()
+                if inspect.isawaitable(res):
+                    await res
     except Exception as e:
         print(f"An error occurred: {e}")
 
@@ -131,7 +138,8 @@ async def get_acr_repository_properties_async(repository_name: str, acr_name: st
         acr_name = acr_name or os.getenv("ACR_NAME", "acvdpwu2p001acr")
         acr_url = f"https://{acr_name}.azurecr.io"
         credential = aio.DefaultAzureCredential()
-        async with aio.ContainerRegistryClient(endpoint=acr_url, credential=credential, audience="https://management.azure.com") as client:
+        client = aio.ContainerRegistryClient(endpoint=acr_url, credential=credential, audience="https://management.azure.com")
+        try:
             rows = []
             iterable = client.list_tag_properties(repository_name)
             if inspect.isawaitable(iterable):
@@ -144,6 +152,12 @@ async def get_acr_repository_properties_async(repository_name: str, acr_name: st
             if save_path:
                 save_to_csv(df, save_path)
             return df
+        finally:
+            closer = getattr(client, "close", None)
+            if closer:
+                res = closer()
+                if inspect.isawaitable(res):
+                    await res
     except Exception as e:
         print(f"An error occurred: {e}")
 
