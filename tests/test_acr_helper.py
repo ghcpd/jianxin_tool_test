@@ -49,8 +49,8 @@ class TestSaveToCsv:
         save_to_csv(data, str(filename))
         
         assert filename.exists()
-        df = pd.read_csv(filename)
-        assert len(df) == 0
+        with pytest.raises(pd.errors.EmptyDataError):
+            pd.read_csv(filename)
 
 
 class TestListAcrRepositories:
