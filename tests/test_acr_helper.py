@@ -49,8 +49,17 @@ class TestSaveToCsv:
         save_to_csv(data, str(filename))
         
         assert filename.exists()
-        df = pd.read_csv(filename)
-        assert len(df) == 0
+        # When reading an empty CSV file with no columns, pandas raises EmptyDataError
+        # This is expected behavior, so we handle it appropriately
+        try:
+            df = pd.read_csv(filename)
+            assert len(df) == 0
+        except pd.errors.EmptyDataError:
+            # This is expected for completely empty CSV files with no columns
+            # Verify the file is essentially empty (just contains newline)
+            with open(filename, 'r') as f:
+                content = f.read()
+                assert content.strip() == ""
 
 
 class TestListAcrRepositories:
