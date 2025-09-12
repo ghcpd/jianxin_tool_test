@@ -5,6 +5,11 @@ from azure.containerregistry import ContainerRegistryClient
 import pandas as pd
 from pathlib import Path
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
+from azure.containerregistry.aio import ContainerRegistryClient as ACRAsync
+from azure.identity.aio import DefaultAzureCredential as DefaultAzureCredentialAsync
+
 load_dotenv()
 
 def save_to_csv(data, filename):
@@ -62,6 +67,78 @@ def get_acr_repository_properties(repository_name: str, acr_name: str=None, save
         if save_path:
             save_to_csv(_tags, save_path)
         return _tags
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+
+
+def get_acr_tags_for_repositories(repositories, acr_name: str=None, save_path: str=None, max_workers: int=4, verbose: bool=False):
+    cols = ["repository", "tag", "created_on", "last_updated_on", "digest"]
+    results = []
+    try:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(get_acr_repository_properties, repo, acr_name, None, verbose) for repo in repositories]
+            for fut in as_completed(futures):
+                try:
+                    df = fut.result()
+                    if df is not None and not df.empty:
+                        results.append(df)
+                except Exception as e:
+                    print(f"An error occurred: {e}")
+        final = pd.concat(results, ignore_index=True) if results else pd.DataFrame(columns=cols)
+        if save_path:
+            save_to_csv(final, save_path)
+        return final
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+
+async def list_acr_repositories_async(acr_name: str=None, save_path: str=None):
+    try:
+        acr_name = acr_name or os.getenv("ACR_NAME", "acvdpwu2p001acr")
+        acr_url = f"https://{acr_name}.azurecr.io"
+        credential = DefaultAzureCredentialAsync()
+        async with ACRAsync(endpoint=acr_url, credential=credential, audience="https://management.azure.com") as client:
+            repos = []
+            async for repo in client.list_repository_names():
+                repos.append([repo])
+            df = pd.DataFrame(repos, columns=["repository"]) 
+            if save_path:
+                save_to_csv(df, save_path)
+            return df
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+
+async def get_acr_repository_properties_async(repository_name: str, acr_name: str=None, save_path: str=None, verbose: bool=True):
+    try:
+        acr_name = acr_name or os.getenv("ACR_NAME", "acvdpwu2p001acr")
+        acr_url = f"https://{acr_name}.azurecr.io"
+        credential = DefaultAzureCredentialAsync()
+        async with ACRAsync(endpoint=acr_url, credential=credential, audience="https://management.azure.com") as client:
+            rows = []
+            async for tag in client.list_tag_properties(repository_name):
+                if verbose:
+                    print(f"- {tag.name}")
+                rows.append([repository_name, tag.name, tag.created_on, tag.last_updated_on, tag.digest])
+            df = pd.DataFrame(rows, columns=["repository", "tag", "created_on", "last_updated_on", "digest"]) 
+            if save_path:
+                save_to_csv(df, save_path)
+            return df
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+
+async def get_acr_tags_for_repositories_async(repositories, acr_name: str=None, save_path: str=None, verbose: bool=False):
+    cols = ["repository", "tag", "created_on", "last_updated_on", "digest"]
+    try:
+        tasks = [get_acr_repository_properties_async(repo, acr_name, None, verbose) for repo in repositories]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        dfs = [r for r in results if isinstance(r, pd.DataFrame) and not r.empty]
+        final = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame(columns=cols)
+        if save_path:
+            save_to_csv(final, save_path)
+        return final
     except Exception as e:
         print(f"An error occurred: {e}")
 
