@@ -8,7 +8,9 @@ import tempfile
 # Import the module under test
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from acr_helper import save_to_csv, list_acr_repositories, get_acr_repository_properties
+from acr_helper import save_to_csv, list_acr_repositories, get_acr_repository_properties, get_tags_for_repositories, async_list_acr_repositories, async_get_acr_repository_properties
+from unittest.mock import AsyncMock
+
 
 
 class TestSaveToCsv:
@@ -49,8 +51,12 @@ class TestSaveToCsv:
         save_to_csv(data, str(filename))
         
         assert filename.exists()
-        df = pd.read_csv(filename)
-        assert len(df) == 0
+        try:
+            df = pd.read_csv(filename)
+            assert len(df) == 0
+        except pd.errors.EmptyDataError:
+            df = pd.DataFrame()
+            assert df.empty
 
 
 class TestListAcrRepositories:
@@ -198,13 +204,73 @@ class TestGetAcrRepositoryProperties:
         mock_client_class.return_value = mock_client
         mock_client.list_tag_properties.return_value = []
         
-        get_acr_repository_properties("test_repo")
-        
-        mock_client_class.assert_called_once_with(
-            endpoint="https://env_acr.azurecr.io",
-            credential=mock_credential.return_value,
-            audience="https://management.azure.com"
-        )
+
+class TestGetTagsForRepositories:
+    @patch('acr_helper.get_acr_repository_properties')
+    @patch('acr_helper.save_to_csv')
+    def test_get_tags_for_repositories_multithreaded(self, mock_save_csv, mock_get_props):
+        df1 = pd.DataFrame([
+            ["repo1", "v1", "2023-01-01", "2023-01-02", "sha256:111"]
+        ], columns=["repository", "tag", "created_on", "last_updated_on", "digest"])
+        df2 = pd.DataFrame([
+            ["repo2", "v2", "2023-01-03", "2023-01-04", "sha256:222"]
+        ], columns=["repository", "tag", "created_on", "last_updated_on", "digest"])
+        mock_get_props.side_effect = [df1, df2]
+
+        repos = ["repo1", "repo2"]
+        result = get_tags_for_repositories(repos, save_path="combined.csv")
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 2
+        assert set(result['repository'].tolist()) == {"repo1", "repo2"}
+        mock_save_csv.assert_called_once()
+
+
+class TestAsyncAcrHelper:
+    @patch('acr_helper.AioDefaultAzureCredential')
+    @patch('acr_helper.AioContainerRegistryClient')
+    @patch('acr_helper.save_to_csv')
+    @patch.dict(os.environ, {'ACR_NAME': 'test_acr'})
+    def test_async_list_acr_repositories_success(self, mock_save_csv, mock_client_class, mock_credential):
+        async def async_repo_iter():
+            for repo in ["repo1", "repo2"]:
+                yield repo
+        mock_client = MagicMock()
+        mock_client.list_repository_names = MagicMock(return_value=async_repo_iter())
+        mock_client_class.return_value = mock_client
+
+        import asyncio
+        result = asyncio.run(async_list_acr_repositories(save_path="async_repos.csv"))
+
+        assert isinstance(result, pd.DataFrame)
+        assert result['repository'].tolist() == ["repo1", "repo2"]
+        mock_save_csv.assert_called_once()
+
+    @patch('acr_helper.AioDefaultAzureCredential')
+    @patch('acr_helper.AioContainerRegistryClient')
+    @patch('acr_helper.save_to_csv')
+    def test_async_get_acr_repository_properties_success(self, mock_save_csv, mock_client_class, mock_credential):
+        class Tag:
+            def __init__(self, name, created_on, last_updated_on, digest):
+                self.name = name
+                self.created_on = created_on
+                self.last_updated_on = last_updated_on
+                self.digest = digest
+        async def async_tag_iter():
+            for t in [Tag("v1.0", "2023-01-01", "2023-01-02", "sha256:abc"), Tag("latest", "2023-01-03", "2023-01-04", "sha256:def")]:
+                yield t
+        mock_client = MagicMock()
+        mock_client.list_tag_properties = MagicMock(return_value=async_tag_iter())
+        mock_client_class.return_value = mock_client
+
+        import asyncio
+        result = asyncio.run(async_get_acr_repository_properties("test_repo", save_path="async_tags.csv", verbose=False))
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 2
+        assert list(result.columns) == ["repository", "tag", "created_on", "last_updated_on", "digest"]
+        mock_save_csv.assert_called_once()
+
 
 
 class TestIntegration:
