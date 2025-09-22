@@ -210,3 +210,9 @@ Temporary Items
 .directory
 .Trash-*
 .nfs*
+
+# Jupyter Notebook
+*.ipynb
+
+# ignore all files under data folder
+data/*

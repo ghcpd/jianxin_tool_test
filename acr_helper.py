@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
 from azure.containerregistry.aio import ContainerRegistryClient as ACRAsync
 from azure.identity.aio import DefaultAzureCredential as DefaultAzureCredentialAsync
-
+from tqdm import tqdm
 import inspect
 
 
@@ -83,13 +83,12 @@ def get_acr_repository_properties(repository_name: str, acr_name: str=None, save
     except Exception as e:
         print(f"An error occurred: {e}")
 
-
-
 def get_acr_tags_for_repositories(repositories, acr_name: str=None, save_path: str=None, max_workers: int=4, verbose: bool=False):
     cols = ["repository", "tag", "created_on", "last_updated_on", "digest"]
     results = []
     try:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            t = tqdm(total=len(repositories), desc="Processing repositories")
             futures = [executor.submit(get_acr_repository_properties, repo, acr_name, None, verbose) for repo in repositories]
             for fut in as_completed(futures):
                 try:
@@ -98,6 +97,8 @@ def get_acr_tags_for_repositories(repositories, acr_name: str=None, save_path: s
                         results.append(df)
                 except Exception as e:
                     print(f"An error occurred: {e}")
+                t.update(1)
+            t.close()
         final = pd.concat(results, ignore_index=True) if results else pd.DataFrame(columns=cols)
         if save_path:
             save_to_csv(final, save_path)
@@ -175,6 +176,27 @@ async def get_acr_tags_for_repositories_async(repositories, acr_name: str=None, 
     except Exception as e:
         print(f"An error occurred: {e}")
 
+def split_csv_into_subsets(input_csv: str, output_dir: str, chunk_size: int=100):
+    try:
+        df = pd.read_csv(input_csv)
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        for i in range(0, len(df), chunk_size):
+            chunk = df.iloc[i:i + chunk_size]
+            chunk_file = os.path.join(output_dir, f"repositories_part_{i//chunk_size + 1}.csv")
+            chunk.to_csv(chunk_file, index=False)
+            print(f"Saved chunk to {chunk_file}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
 if __name__ == "__main__":
-    list_acr_repositories(save_path="data/acr_repositories.csv")
+    # list_acr_repositories(save_path="data/acr_repositories.csv")
+    # split_csv_into_subsets("data/acr_repositories.csv", "data/repo_chunks", chunk_size=100)
+    # for part in Path("data/repo_chunks").glob("repositories_part_*.csv"):
+    #     print(f"Processing {part}")
+    #     repos = pd.read_csv(part)["repository"].tolist()
+    #     out_file = f"data/repo_tags_0917/acr_tags_{part.stem}.csv"
+    #     get_acr_tags_for_repositories(repositories=repos, save_path=out_file, max_workers=16, verbose=False)
+    # repos = pd.read_csv("data/repo_chunks/repositories_part_1.csv")["repository"].tolist()
+    # get_acr_tags_for_repositories(repositories=repos, save_path="data/repo_tags/acr_tags_part_1.csv", max_workers=16, verbose=True)
     # get_acr_repository_properties("abanteai__apples-to-models-108")
+    pass
